@@ -1,43 +1,37 @@
-name: Build ImmortalWrt x86_64 1GB IPv6版
-
+name: Build ImmortalWrt x86_64 1GB IPv6
 on:
   workflow_dispatch:
-  repository_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
-      id-token: write
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: 安装依赖
         run: |
           sudo apt update
           sudo apt install -y build-essential libncurses-dev git flex gawk libssl-dev rsync wget unzip zstd
 
-      - name: Clone ImmortalWrt
+      - name: 克隆源码
         run: |
           git clone https://github.com/immortalwrt/immortalwrt.git --depth=1 openwrt
 
-      - name: Add extra feeds
+      - name: 添加常用插件源
         run: |
           cd openwrt
           echo "" >> feeds.conf.default
-          echo "src-git daji https://github.com/kongfl888/openwrt-package.git" >> feeds.conf.default
           echo "src-git small https://github.com/kiddin9/openwrt-packages.git" >> feeds.conf.default
 
-      - name: Update feeds
+      - name: 更新 feeds
         run: |
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Generate config
+      - name: 生成配置
         run: |
           cd openwrt
           cat > .config <<EOF
@@ -49,13 +43,13 @@ jobs:
           CONFIG_TARGET_ROOTFS_EXT4=y
           # CONFIG_TARGET_ROOTFS_SQUASHFS is not set
 
-          # IPv6 完整支持
+          # IPv6
           CONFIG_IPV6=y
+          CONFIG_PACKAGE_dnsmasq-full=y
           CONFIG_PACKAGE_dnsmasq_full_ipv6=y
           CONFIG_PACKAGE_odhcp6c=y
           CONFIG_PACKAGE_odhcpd-ipv6only=y
           CONFIG_PACKAGE_luci-proto-ipv6=y
-          CONFIG_PACKAGE_luci-app-ip6tables=y
           CONFIG_PACKAGE_ipv6helper=y
 
           # 中文
@@ -69,10 +63,6 @@ jobs:
           CONFIG_PACKAGE_luci-app-filetransfer=y
           CONFIG_PACKAGE_luci-app-samba4=y
           CONFIG_PACKAGE_luci-app-wol=y
-
-          # 大吉
-          CONFIG_PACKAGE_luci-app-daji=y
-          CONFIG_PACKAGE_luci-app-daji-config=y
 
           # AdGuardHome
           CONFIG_PACKAGE_luci-app-adguardhome=y
@@ -99,7 +89,7 @@ jobs:
           CONFIG_PACKAGE_luci-app-zerotier=y
           CONFIG_PACKAGE_zerotier-one=y
 
-          # USB & Storage
+          # 存储
           CONFIG_PACKAGE_kmod-usb-storage=y
           CONFIG_PACKAGE_kmod-fs-ext4=y
           CONFIG_PACKAGE_kmod-fs-ntfs3=y
@@ -108,32 +98,27 @@ jobs:
 
           make defconfig
 
-      - name: Download deps
+      - name: 下载依赖
         run: |
           cd openwrt
           make download -j$(nproc)
 
-      - name: Compile
+      - name: 单线程编译（防止报错）
         run: |
           cd openwrt
-          make -j$(nproc) || make -j1 V=s
+          make -j1 V=s
 
-      - name: Package firmware
+      - name: 整理固件
         run: |
           mkdir -p firmware
-          cp -f openwrt/bin/targets/x86/64/* firmware/ 2>/dev/null || true
+          cp openwrt/bin/targets/x86/64/* firmware/ 2>/dev/null || true
 
-      - name: Upload to Release
+      - name: 上传到 Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: immortalwrt-x86-64-1gb-ipv6-$(date +%Y%m%d)
-          name: ImmortalWrt x86_64 1GB IPv6完整版
-          body: |
-            自动编译
-            - 架构：x86_64
-            - 空间：1GB EXT4
-            - 完整 IPv6 支持
-            - 插件：大吉、AdGuardHome、MosDNS、OpenClash、EasyTier、ZeroTier 等
+          tag_name: immortalwrt-x86_64-1gb-ipv6-$(date +%Y%m%d%H%M)
+          name: ImmortalWrt x86_64 1GB IPv6
+          body: "编译完成"
           files: firmware/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
