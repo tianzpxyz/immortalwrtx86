@@ -1,4 +1,4 @@
-name: Build ImmortalWrt x86_64 1GB 完整版
+name: Build ImmortalWrt x86_64 1GB IPv6版
 
 on:
   workflow_dispatch:
@@ -12,32 +12,32 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout 仓库
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: 安装编译依赖
+      - name: Install dependencies
         run: |
           sudo apt update
           sudo apt install -y build-essential libncurses-dev git flex gawk libssl-dev rsync wget unzip zstd
 
-      - name: 克隆 ImmortalWrt 源码
+      - name: Clone ImmortalWrt
         run: |
           git clone https://github.com/immortalwrt/immortalwrt.git --depth=1 openwrt
 
-      - name: 添加第三方软件源
+      - name: Add extra feeds
         run: |
           cd openwrt
           echo "" >> feeds.conf.default
           echo "src-git daji https://github.com/kongfl888/openwrt-package.git" >> feeds.conf.default
           echo "src-git small https://github.com/kiddin9/openwrt-packages.git" >> feeds.conf.default
 
-      - name: 更新 feeds
+      - name: Update feeds
         run: |
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: 生成编译配置
+      - name: Generate config
         run: |
           cd openwrt
           cat > .config <<EOF
@@ -45,10 +45,18 @@ jobs:
           CONFIG_TARGET_x86_64=y
           CONFIG_TARGET_x86_64_DEVICE_generic=y
 
-          # 1GB 可用空间
           CONFIG_TARGET_ROOTFS_PARTSIZE=1024
           CONFIG_TARGET_ROOTFS_EXT4=y
           # CONFIG_TARGET_ROOTFS_SQUASHFS is not set
+
+          # IPv6 完整支持
+          CONFIG_IPV6=y
+          CONFIG_PACKAGE_dnsmasq_full_ipv6=y
+          CONFIG_PACKAGE_odhcp6c=y
+          CONFIG_PACKAGE_odhcpd-ipv6only=y
+          CONFIG_PACKAGE_luci-proto-ipv6=y
+          CONFIG_PACKAGE_luci-app-ip6tables=y
+          CONFIG_PACKAGE_ipv6helper=y
 
           # 中文
           CONFIG_LUCI_LANG_zh_Hans=y
@@ -91,7 +99,7 @@ jobs:
           CONFIG_PACKAGE_luci-app-zerotier=y
           CONFIG_PACKAGE_zerotier-one=y
 
-          # 存储驱动
+          # USB & Storage
           CONFIG_PACKAGE_kmod-usb-storage=y
           CONFIG_PACKAGE_kmod-fs-ext4=y
           CONFIG_PACKAGE_kmod-fs-ntfs3=y
@@ -100,33 +108,31 @@ jobs:
 
           make defconfig
 
-      - name: 下载依赖
+      - name: Download deps
         run: |
           cd openwrt
           make download -j$(nproc)
 
-      - name: 编译固件
+      - name: Compile
         run: |
           cd openwrt
           make -j$(nproc) || make -j1 V=s
 
-      # 打包固件
-      - name: 整理固件
+      - name: Package firmware
         run: |
           mkdir -p firmware
           cp -f openwrt/bin/targets/x86/64/* firmware/ 2>/dev/null || true
 
-      # 上传到你仓库的 Release
-      - name: 上传到 GitHub Release
+      - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: immortalwrt-x86-64-1gb-20260322
-          name: ImmortalWrt x86_64 1GB 完整版
+          tag_name: immortalwrt-x86-64-1gb-ipv6-$(date +%Y%m%d)
+          name: ImmortalWrt x86_64 1GB IPv6完整版
           body: |
-            自动编译固件
-            - 源码：ImmortalWrt
+            自动编译
             - 架构：x86_64
             - 空间：1GB EXT4
+            - 完整 IPv6 支持
             - 插件：大吉、AdGuardHome、MosDNS、OpenClash、EasyTier、ZeroTier 等
           files: firmware/*
         env:
